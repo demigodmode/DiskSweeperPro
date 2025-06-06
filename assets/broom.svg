@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="#000" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- handle -->
+  <line x1="5" y1="5" x2="19" y2="19" />
+  <!-- head -->
+  <path d="M15 19 L19 15 L19 19 Z" />
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="#000" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- rounded-corner triangle -->
+  <path d="M12 3 L22 19 Q22.8 20.4 21.2 20.4 H2.8 Q1.2 20.4 2 19 L12 3 Z" />
+  <!-- exclamation -->
+  <line x1="12" y1="9" x2="12" y2="13" />
+  <circle cx="12" cy="16" r="1" fill="#000"/>
+</svg>

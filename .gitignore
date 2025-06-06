@@ -1,0 +1,25 @@
+#–– IDE & editor –––––––––––––––––––––––––––––––––––––––––––
+.idea/
+.vscode/
+*.swp
+*.swo
+
+#–– Python build / venv ––––––––––––––––––––––––––––––––––––
+.venv/
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+*.spec            # PyInstaller build script
+
+#–– Test + coverage ––––––––––––––––––––––––––––––––––––––––
+.pytest_cache/
+.coverage
+htmlcov/
+
+#–– OS cruft –––––––––––––––––––––––––––––––––––––––––––––––
+.DS_Store
+Thumbs.db

@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="icons/broom">../../assets/broom.svg</file>
+    <file alias="icons/warning">../../assets/warning.svg</file>
+    <file alias="icons/logo">../../assets/logo.svg</file>
+  </qresource>
+</RCC>

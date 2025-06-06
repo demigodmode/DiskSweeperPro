@@ -1,0 +1,81 @@
+# Human-editable rule list for Disk Sweeper Pro
+# Path can include {LOCAL} and {SYSTEM_ROOT} placeholders (expanded at runtime)
+
+- label: System Temp
+  path: "{SYSTEM_ROOT}\\Temp"
+  min_size: 52428800      # 50 MB
+  severity: safe
+  reason: "Pure OS temp files recreated automatically."
+
+- label: User Temp
+  path: "{LOCAL}\\Temp"
+  min_size: 52428800
+  severity: safe
+  reason: "User-level *.tmp / install leftovers; safe to wipe."
+
+- label: Prefetch
+  path: "{SYSTEM_ROOT}\\Prefetch"
+  min_size: 5242880       # 5 MB
+  min_age: 0
+  severity: moderate
+  reason: "Windows launch-time optimisation; first boot slower."
+
+- label: Thumbnail Cache
+  path: "{LOCAL}\\Microsoft\\Windows\\Explorer"
+  min_size: 5242880
+  min_age: 0
+  severity: moderate
+  reason: "Explorer regenerates thumbnails; first folder view slower."
+
+- label: Edge Cache
+  path: edge_caches        # dynamic generator
+  min_size: 104857600
+  severity: safe
+  reason: "Images/scripts – login cookies kept intact."
+
+- label: Chrome Cache
+  path: chrome_caches      # dynamic generator
+  min_size: 104857600
+  severity: safe
+  reason: "Images/scripts – login cookies kept intact."
+
+- label: Windows Update DL
+  path: "{SYSTEM_ROOT}\\SoftwareDistribution\\Download"
+  min_size: 209715200
+  severity: moderate
+  reason: "Downloaded updates; loses retry/rollback for pending patch."
+
+- label: pip Cache
+  path: "{LOCAL}\\pip\\Cache"
+  min_size: 20971520
+  min_age: 7
+  severity: safe
+  reason: "Wheel/fetch cache – next install may re-download."
+
+- label: npm Cache
+  path: "~\\.npm"
+  min_size: 52428800
+  min_age: 7
+  severity: safe
+  reason: "Packages cached by npm – rebuilds automatically."
+
+- label: VS Code Cache
+  path: "{LOCAL}\\Code\\Cache"
+  min_size: 52428800
+  min_age: 30
+  severity: moderate
+  reason: "Code Intel + webcache; VS Code slower first launch."
+
+- label: PyCharm Cache
+  path: "{LOCAL}\\JetBrains\\PyCharm*"
+  min_size: 52428800
+  min_age: 30
+  severity: moderate
+  reason: "Indexes/local-history; IDE will re-index projects."
+
+- label: WinSxS (aged)
+  path: "{SYSTEM_ROOT}\\WinSxS"
+  min_size: 524288000
+  min_age: 180
+  severity: aggressive
+  reason: "Old component store – deleting breaks update rollback."
