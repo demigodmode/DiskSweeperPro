@@ -1,8 +1,7 @@
-psutil==7.0.0
-PySide6==6.9.0
-PySide6_Addons==6.9.0
-PySide6_Essentials==6.9.0
-pytest==8.3.5
+# Production dependencies
+PySide6==6.9.1
 PyYAML==6.0.2
 QDarkStyle==3.2.3
-rich==14.0.0
+
+# Development dependencies
+pytest==8.3.5
