@@ -3,6 +3,7 @@
 .vscode/
 *.swp
 *.swo
+CLAUDE.md
 
 #–– Python build / venv ––––––––––––––––––––––––––––––––––––
 .venv/
