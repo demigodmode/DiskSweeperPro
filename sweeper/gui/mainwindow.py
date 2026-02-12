@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.btn_scan)
         bar.addWidget(btn_sel)
         bar.addWidget(btn_inv)
-        bar.addWidget(btn_clean)
+        bar.addWidget(self.btn_clean)
 
         # central widget
         central = QWidget(self)
