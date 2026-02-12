@@ -10,9 +10,10 @@ sweeper.core.collector
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from types import ModuleType
-from typing import Iterable, Iterator, List, Set
+from typing import Callable, Iterable, Iterator, List, Optional, Set
 
 from .rules import (
     Rule,
@@ -93,18 +94,70 @@ for r in RULES:  # re-point the two rules that used the earlier stubs
 # ── Public API -------------------------------------------------------------
 
 
-def collect(rules: List[Rule], *, include: Set[str]) -> List[Candidate]:
-    """Return a list of Candidates whose rule.severity is in *include*."""
-    found: list[Candidate] = []
+def _scan_single_path(args: tuple) -> Optional[Candidate]:
+    """Scan a single path for a rule. Used by parallel executor."""
+    rule, path, cutoff = args
+    size = _walk_size(path, cutoff=cutoff)
+    if size >= rule.min_size:
+        return Candidate(rule, path, size)
+    return None
+
+
+def collect(
+    rules: List[Rule],
+    *,
+    include: Set[str],
+    parallel: bool = True,
+    max_workers: int = 4,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+) -> List[Candidate]:
+    """
+    Return a list of Candidates whose rule.severity is in *include*.
+
+    Args:
+        rules: List of cleanup rules to scan
+        include: Set of severity levels to include
+        parallel: Use parallel scanning (default True)
+        max_workers: Max threads for parallel scanning
+        on_progress: Optional callback(completed, total) for progress updates
+    """
+    # Build list of (rule, path, cutoff) tuples to scan
+    scan_tasks = []
     for r in rules:
         if r.severity not in include:
             continue
         paths = r.path() if callable(r.path) else [r.path]
         cutoff = NOW - r.min_age * 86_400 if r.min_age else None
         for p in paths:
-            size = _walk_size(p, cutoff=cutoff)
-            if size >= r.min_size:
-                found.append(Candidate(r, p, size))
+            scan_tasks.append((r, p, cutoff))
+
+    total = len(scan_tasks)
+    if total == 0:
+        return []
+
+    found: list[Candidate] = []
+
+    if parallel and total > 1:
+        # Parallel scanning with ThreadPoolExecutor
+        completed = 0
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_scan_single_path, task): task for task in scan_tasks}
+            for future in as_completed(futures):
+                completed += 1
+                if on_progress:
+                    on_progress(completed, total)
+                result = future.result()
+                if result is not None:
+                    found.append(result)
+    else:
+        # Sequential scanning (fallback)
+        for i, task in enumerate(scan_tasks, 1):
+            result = _scan_single_path(task)
+            if result is not None:
+                found.append(result)
+            if on_progress:
+                on_progress(i, total)
+
     return found
 
 
