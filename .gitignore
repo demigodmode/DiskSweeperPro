@@ -3,8 +3,10 @@
 .vscode/
 *.swp
 *.swo
-CLAUDE.md
-AGENTS.md
+
+#–– LOCAL DOCS –––––––––––––––––––––––––––––––––––––––––––
+local_docs/
+
 
 #–– Python build / venv ––––––––––––––––––––––––––––––––––––
 .venv/
@@ -30,3 +32,7 @@ Thumbs.db
 build/
 dist/
 *.spec
+
+#–– Rust ––––––––––––––––––––––––––––––––––––––––––––––––––––
+disksweeper-rs/target/
+disksweeper-rs/Cargo.lock
