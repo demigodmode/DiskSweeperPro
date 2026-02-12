@@ -3,6 +3,7 @@
 Disk Sweeper Pro – GUI main window
 * Icons + full menu bar
 * Dark/Light toggle, rule reload, log-folder opener, CSV export
+* Deferred scanning with progress indicator
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import ctypes
 from importlib import reload
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QModelIndex, Slot, QUrl
+from PySide6.QtCore import Qt, QModelIndex, Slot, QUrl, QThread, Signal, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -26,6 +27,30 @@ from ..core import rules as rules_mod  # for reload
 from ..core.rules import Candidate, SEVERITY_ORDER, LOCAL
 
 from PySide6.QtCore import QAbstractTableModel
+
+
+# ── Background scanner thread ------------------------------------------------
+class ScanWorker(QThread):
+    """Background thread for scanning disk without blocking GUI."""
+    progress = Signal(int, int)  # (completed, total)
+    finished = Signal(list)      # list of Candidates
+
+    def __init__(self, rules, include):
+        super().__init__()
+        self._rules = rules
+        self._include = include
+
+    def run(self):
+        def on_progress(completed, total):
+            self.progress.emit(completed, total)
+
+        results = collect(
+            self._rules,
+            include=self._include,
+            parallel=True,
+            on_progress=on_progress,
+        )
+        self.finished.emit(results)
 
 
 # ── Table model -------------------------------------------------------------
@@ -90,7 +115,7 @@ class CandidateModel(QAbstractTableModel):
 
 # ── Main window -------------------------------------------------------------
 class MainWindow(QMainWindow):
-    VERSION = "0.4.3"
+    VERSION = "0.5.0"
 
     def __init__(self):
         super().__init__()
@@ -98,8 +123,9 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(":/icons/logo"))
         QApplication.setStyle("Fusion")
 
-        # model & table
-        self._rebuild_model()
+        # Start with empty model (deferred scanning)
+        self.model = CandidateModel([])
+        self._scan_worker = None
 
         self.table = QTableView()
         self.table.setModel(self.model)
@@ -114,18 +140,23 @@ class MainWindow(QMainWindow):
         self.table.clicked.connect(self._row_toggle)
 
         # bottom bar
-        self.lbl = QLabel(self._space())
+        self.lbl = QLabel("Click 'Scan' to find cleanup candidates...")
+        self.btn_scan = QPushButton("  Scan")
+        self.btn_scan.setIcon(QIcon(":/icons/logo"))
+        self.btn_scan.clicked.connect(self._start_scan)
         btn_sel = QPushButton("Select All")
         btn_sel.clicked.connect(lambda: (self.model.toggle_all(True), self._update()))
         btn_inv = QPushButton("Invert")
         btn_inv.clicked.connect(lambda: (self.model.invert(), self._update()))
-        btn_clean = QPushButton("  CLEAN")
-        btn_clean.setIcon(QIcon(":/icons/broom"))
-        btn_clean.clicked.connect(self._clean)
+        self.btn_clean = QPushButton("  CLEAN")
+        self.btn_clean.setIcon(QIcon(":/icons/broom"))
+        self.btn_clean.clicked.connect(self._clean)
+        self.btn_clean.setEnabled(False)  # Disabled until scan completes
 
         bar = QHBoxLayout()
         bar.addWidget(self.lbl)
         bar.addStretch(1)
+        bar.addWidget(self.btn_scan)
         bar.addWidget(btn_sel)
         bar.addWidget(btn_inv)
         bar.addWidget(btn_clean)
@@ -146,6 +177,9 @@ class MainWindow(QMainWindow):
 
         # menus
         self._build_menus()
+
+        # Auto-start scan after window is shown (deferred)
+        QTimer.singleShot(100, self._start_scan)
 
     # ----- menu bar --------------------------------------------------------
     def _build_menus(self):
@@ -180,20 +214,53 @@ class MainWindow(QMainWindow):
         helpm.addSeparator()
         helpm.addAction("&About…", self._about)
 
-    # ----- slots / helpers -------------------------------------------------
-    def _rebuild_model(self):
-        rows = collect(rules_mod.RULES, include=set(rules_mod.SEVERITY_ORDER))
+    # ----- scanning --------------------------------------------------------
+    @Slot()
+    def _start_scan(self):
+        """Start background scan (deferred, non-blocking)."""
+        if self._scan_worker is not None and self._scan_worker.isRunning():
+            return  # Already scanning
+
+        self.btn_scan.setEnabled(False)
+        self.btn_scan.setText("  Scanning...")
+        self.btn_clean.setEnabled(False)
+        self.lbl.setText("Scanning disk...")
+
+        self._scan_worker = ScanWorker(
+            rules_mod.RULES,
+            include=set(rules_mod.SEVERITY_ORDER)
+        )
+        self._scan_worker.progress.connect(self._on_scan_progress)
+        self._scan_worker.finished.connect(self._on_scan_finished)
+        self._scan_worker.start()
+
+    @Slot(int, int)
+    def _on_scan_progress(self, completed: int, total: int):
+        """Update progress during scan."""
+        self.lbl.setText(f"Scanning... ({completed}/{total} paths)")
+
+    @Slot(list)
+    def _on_scan_finished(self, rows: list):
+        """Handle scan completion."""
         rows.sort(key=lambda c: (rules_mod.SEVERITY_ORDER[c.rule.severity], -c.size))
         self.model = CandidateModel(rows)
+        self.table.setModel(self.model)
 
+        self.btn_scan.setEnabled(True)
+        self.btn_scan.setText("  Rescan")
+        self.btn_clean.setEnabled(len(rows) > 0)
+
+        total_size = sum(c.size for c in rows)
+        self.lbl.setText(f"Found {len(rows)} candidates | Total: {fmt_sz(total_size)}")
+        self._scan_worker = None
+
+    # ----- slots / helpers -------------------------------------------------
     @Slot()
     def _reload_rules(self):
         try:
             reload(rules_mod)
-            self._rebuild_model()
-            self.table.setModel(self.model)
-            self._update()
-            QMessageBox.information(self, "Rules reloaded", "Rule list reloaded from YAML / source.")
+            QMessageBox.information(self, "Rules reloaded", "Rule list reloaded. Click Rescan to apply.")
+            self._start_scan()
         except Exception as exc:
             QMessageBox.critical(self, "Error reloading rules", str(exc))
 
@@ -230,8 +297,15 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "Error", str(exc))
 
-    def _space(self): return f"Potential space: {fmt_sz(sum(c.size for c in self.model.selected()))}"
-    def _update(self): self.lbl.setText(self._space())
+    def _space(self):
+        selected = self.model.selected()
+        total_rows = len(self.model._rows)
+        selected_size = sum(c.size for c in selected)
+        return f"Selected: {len(selected)}/{total_rows} | Space to free: {fmt_sz(selected_size)}"
+
+    def _update(self):
+        self.lbl.setText(self._space())
+        self.btn_clean.setEnabled(len(self.model.selected()) > 0)
 
     @Slot(QModelIndex)
     def _row_toggle(self, idx: QModelIndex):
